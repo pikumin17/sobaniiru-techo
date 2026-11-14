@@ -37,6 +37,8 @@
 .choice{ min-height:56px; min-width:48px; padding:10px 18px; border-radius:12px;
   border:2px solid var(--line); background:var(--surface); font-size:1.05rem; font-family:inherit; cursor:pointer; }
 .choice.selected{ background:var(--primary); border-color:var(--primary); color:#fff; font-weight:700; }
+/* I-8: ボタン要素は本文色を継承しないため、選択肢と子の切り替えタブには文字色を明示する（ダーク表示で黒文字になるのを防ぐ） */
+.choice, .pet-tab{ color:var(--ink); }
 .checkrow{ display:flex; align-items:center; gap:12px; min-height:56px; padding:8px 4px; }
 .checkrow input[type="checkbox"]{ width:30px; height:30px; accent-color:var(--accent); }
 .dialog-backdrop{ position:fixed; inset:0; background:rgba(40,32,20,.5); z-index:50;
@@ -57,11 +59,11 @@
 .med-task input[type="checkbox"]{ width:34px; height:34px; accent-color:var(--accent); flex:none; }
 .med-task .done{ text-decoration:line-through; color:var(--muted); }
 table.data{ width:100%; border-collapse:collapse; background:var(--surface); font-size:.95rem; }
-table.data th, table.data td{ border:1px solid #33302a; padding:8px 6px; text-align:center; white-space:nowrap; }
+table.data th, table.data td{ border:1px solid var(--cell-line); padding:8px 6px; text-align:center; white-space:nowrap; }
 table.data th{ background:var(--th-bg); }
 .table-scroll{ overflow-x:auto; }
 .meal-grid{ display:grid; gap:4px; }
-.meal-cell{ border:1px solid #33302a; background:var(--surface); text-align:center; padding:6px 2px; font-size:.95rem; }
+.meal-cell{ border:1px solid var(--cell-line); background:var(--surface); text-align:center; padding:6px 2px; font-size:.95rem; }
 .kv{ display:flex; gap:10px; padding:6px 0; border-bottom:1px dashed var(--line); }
 .kv dt{ font-weight:700; min-width:6.5em; }
 .kv dd{ margin:0; }
@@ -70,7 +72,8 @@ table.data th{ background:var(--th-bg); }
 
 /* I-10: 端末のダーク設定に合わせる */
 @media (prefers-color-scheme: dark){
-  :root{ --bg:#211c16; --ink:#f2ead9; --muted:#c4bba6; --surface:#2c261e; --surface2:#282219; --th-bg:#3a332a; --warn-bg:#4a3d1e; }
+  :root{ --bg:#211c16; --ink:#f2ead9; --muted:#c4bba6; --surface:#2c261e; --surface2:#282219; --th-bg:#3a332a; --warn-bg:#4a3d1e; --cell-line:#a08d6b; }
+  .tabbar a:active{ background:#453b2c; }
   .banner-info{ background:#22352c; border-color:#3f6a54; }
   .error-box{ background:#472623; border-color:#8a443c; color:#ffd9d3; }
   .persist-note{ color:#f2ead9; }

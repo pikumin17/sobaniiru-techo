@@ -2,10 +2,10 @@
 import { app } from "../main.js";
 import { go, rerender } from "../router.js";
 import { Records, Schedules, Doses, CustomItems, Device, markDataSince } from "../db/repo.js";
-import { idbDelete } from "../db/idb.js";
+import { idbDelete, idbGet } from "../db/idb.js";
 import { deleteRecord } from "../db/trash.js";
 import { todaysMedTasks } from "../domain/reminders.js";
-import { today, nowTime } from "../domain/dates.js";
+import { today, nowTime, fmtJPFull } from "../domain/dates.js";
 import { parseWeight } from "../domain/format.js";
 import { petHeaderHTML, bindPetTabs, escapeHtml } from "../ui/pet-header.js";
 import { confirmDialog } from "../ui/dialog.js";
@@ -150,7 +150,13 @@ export async function render(root, params) {
   formEl.addEventListener("input", queueDraft);
   formEl.addEventListener("change", queueDraft);
   root.querySelectorAll(".choice").forEach((c) => c.addEventListener("click", () => setTimeout(queueDraft, 0)));
-  window.addEventListener("pagehide", saveDraftNow);
+  // pagehide は名前付きで登録し、フォームが画面から外れたら外す（記録画面を開くたびに増やさない）
+  const onPageHide = () => { saveDraftNow(); };
+  window.addEventListener("pagehide", onPageHide);
+  const draftObs = new MutationObserver(() => {
+    if (!formEl.isConnected) { window.removeEventListener("pagehide", onPageHide); draftObs.disconnect(); }
+  });
+  draftObs.observe(root, { childList: true });
   try {
     const savedDraft = await Device.get(draftKey, null);
     if (savedDraft?.data && draftHasContent(savedDraft.data)) {
@@ -181,10 +187,21 @@ export async function render(root, params) {
       }
       const banner = document.createElement("div");
       banner.className = "banner banner-info";
-      banner.innerHTML = `入力の途中は自動で保存されています。前回の途中入力を復元しました。 <button type="button" class="btn btn-sm btn-ghost" id="draft-clear">破棄する</button>`;
+      // 下書きの日付を見せ、前日のものなら「今日の日付にする」を選べるようにする（勝手には書き換えない）
+      const draftDate = !editId ? d.date : null;
+      const isOldDate = !!draftDate && draftDate !== today();
+      banner.innerHTML = `入力の途中は自動で保存されています。${draftDate ? `${fmtJPFull(draftDate)}の途中入力を復元しました。` : "前回の途中入力を復元しました。"}
+        ${isOldDate ? `<button type="button" class="btn btn-sm" id="draft-today">今日の日付にする</button>` : ""}
+        <button type="button" class="btn btn-sm btn-ghost" id="draft-clear">破棄する</button>`;
       formEl.parentElement.insertBefore(banner, formEl);
       banner.querySelector("#draft-clear").addEventListener("click", async () => {
         await idbDelete("device", draftKey); rerender();
+      });
+      if (isOldDate) banner.querySelector("#draft-today").addEventListener("click", async () => {
+        root.querySelector("#f-date").value = today();
+        await renderMed();
+        await saveDraftNow();
+        rerender();
       });
     }
   } catch { /* 復元できなくても通常の入力は続けられる */ }
@@ -192,6 +209,9 @@ export async function render(root, params) {
   root.querySelector("#del")?.addEventListener("click", async () => {
     const ok = await confirmDialog({ title: "この記録を消しますか？", body: "消しても、しばらくの間は設定の「ごみ箱」から元に戻せます。", okLabel: "消す", danger: true });
     if (!ok) return;
+    // 消した記録の途中入力が「復元しました」で戻ってこないよう、下書きとタイマーも片付ける
+    clearTimeout(draftTimer);
+    await idbDelete("device", draftKey).catch(() => {});
     await deleteRecord(existing, pet.name);
     toast("記録を消しました（ごみ箱から戻せます）");
     go("/review");
@@ -199,6 +219,7 @@ export async function render(root, params) {
 
   root.querySelector("#rec-form").addEventListener("submit", async (e) => {
     e.preventDefault();
+    clearTimeout(draftTimer); // 保留中の下書き保存が保存後に書き戻され、二重登録にならないように
     const errEl = root.querySelector("#err");
     clearError(errEl);
     const date = root.querySelector("#f-date").value;
@@ -238,6 +259,18 @@ export async function render(root, params) {
     const anyCustom = Object.values(customByPet).some((o) => Object.keys(o).length);
     if (!anyField && !anyDose && !anyCustom && !existing) { showError(errEl, M.errors.emptyRecord); return; }
 
+    // 「取り消す」でお薬のチェックも戻せるよう、保存前の状態を控える（お薬だけの保存でも取り消しが効くように）
+    const prevDoses = [];
+    for (const b of doseBoxes) {
+      const id = Doses.id(b.dataset.sid, date, b.dataset.slot);
+      prevDoses.push({ id, prev: (await idbGet("doses", id)) ?? null });
+    }
+    const restoreDoses = async () => {
+      for (const { id, prev } of prevDoses) {
+        if (prev) await Doses.save(prev); else await Doses.remove(id);
+      }
+    };
+
     const batchId = batch ? uuid() : null;
     const createdIds = [];
     try {
@@ -272,16 +305,18 @@ export async function render(root, params) {
     if (batch) {
       toast(`${app.pets.length}頭分を記録しました`, { actionLabel: "取り消す", ms: 6000, onAction: async () => {
         for (const id of createdIds) await Records.remove(id);
+        await restoreDoses();
         rerender();
       }});
     } else if (existing) {
       const prevSnapshot = JSON.parse(JSON.stringify(existing));
       toast("変更を保存しました", { actionLabel: "取り消す", ms: 6000, onAction: async () => {
-        await Records.save(prevSnapshot); rerender();
+        await Records.save(prevSnapshot); await restoreDoses(); rerender();
       }});
     } else {
       toast("保存しました", { actionLabel: "取り消す", ms: 6000, onAction: async () => {
         for (const id of createdIds) await Records.remove(id);
+        await restoreDoses();
         rerender();
       }});
     }

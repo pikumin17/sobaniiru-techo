@@ -31,13 +31,13 @@ export async function render(root) {
     const x = (i) => PL + (i * (W - PL - 8)) / (DAYS - 1);
     const y = (v) => PT + (1 - (v - min) / span) * (H - PT - PB);
     const pts = weights.map((v, i) => (v == null ? null : [x(i), y(v)])).filter(Boolean);
-    svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:12px" role="img" aria-label="体重の折れ線グラフ">
-      <text x="4" y="${y(max) + 4}" font-size="12">${max}</text>
-      <text x="4" y="${y(min) + 4}" font-size="12">${min}</text>
+    svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px" role="img" aria-label="体重の折れ線グラフ">
+      <text x="4" y="${y(max) + 4}" font-size="12" fill="currentColor">${max}</text>
+      <text x="4" y="${y(min) + 4}" font-size="12" fill="currentColor">${min}</text>
       <polyline points="${pts.map((p) => p.join(",")).join(" ")}" fill="none" stroke="#b3541e" stroke-width="2.5"/>
       ${pts.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#b3541e"/>`).join("")}
-      <text x="${PL}" y="${H - 4}" font-size="11">${fmtJP(from)}</text>
-      <text x="${W - 70}" y="${H - 4}" font-size="11">${fmtJP(end)}</text>
+      <text x="${PL}" y="${H - 4}" font-size="11" fill="currentColor">${fmtJP(from)}</text>
+      <text x="${W - 70}" y="${H - 4}" font-size="11" fill="currentColor">${fmtJP(end)}</text>
     </svg>`;
   } else if (wVals.length === 1) {
     svg = `<p>体重の記録は1回分あります（${wVals[0]}kg）。2回以上たまると線で表示されます。</p>`;

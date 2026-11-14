@@ -6,7 +6,7 @@ export const DB_NAME = APP_ID;
 export const TEST_DB_NAME = "sobaniiru-techo-test";
 export const DB_VERSION = 2;
 export const FORMAT_VERSION = 1;
-export const APP_VERSION = "1.1.0";
+export const APP_VERSION = "1.2.0";
 
 export const TRASH_DAYS = 30; // ごみ箱の保存期間（日）〔提案値〕
 export const EXPORT_NUDGE_DAYS = 7; // 書き出しを促すまでの期間（日）〔提案値〕

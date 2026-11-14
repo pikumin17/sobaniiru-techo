@@ -47,6 +47,7 @@ export async function render(root) {
       ・「ふりかえり」で日ごとの記録と、体重・食事のグラフが見られます。<br>
       ・家族や病院へ渡すときは「申し送りを作る」から印刷できます。</p>
       <p>お問い合わせ：<a href="https://github.com/pikumin17/sobaniiru-techo/issues" target="_blank" rel="noopener">そばにいる手帳の問い合わせページ</a></p>
+      <p class="small">※お問い合わせページは、どなたでも見られる場所です。ペットの持病や連絡先など、個人の情報は書かないでください。</p>
       <button class="btn btn-block" id="to-privacy">プライバシーポリシー</button>
       <button class="btn btn-block" id="to-terms">利用規約</button>
     </div>
