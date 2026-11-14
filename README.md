@@ -9,7 +9,8 @@
 index.html          入口（アプリと診断への案内）
 app/                介護記録アプリ本体（PWA、ハッシュルーティングの1ページ構成）
 shindan/            性格タイプ診断（入口・犬・猫・タイプ別結果ページ12枚・OGP画像）
-tests/              自動テスト用ページ（往復・移行・診断分布・エラー一覧）
+tests/              自動テスト用ページ（往復・移行・1年分・強制終了・診断分布・エラー一覧）
+docs/               設計書・発注書（v3）・スクリーンショット・自己採点（docs/self-score.md）
 _headers            Cloudflare Pages用（GitHub Pagesでは無視されます）
 ```
 
@@ -43,7 +44,9 @@ python3 -m http.server 8611
 ブラウザで次のページを開き、ボタンを押して実行します（いずれもテスト専用DB `sobaniiru-techo-test` のみ使用し、本番データには触りません）。
 
 - `tests/roundtrip.html`：JSON書き出し→全削除→読み込みで全データが戻るか（往復テスト）
-- `tests/migrations.html`：データ形式の移行の仕組み（適用・失敗時の中止・元データ保全）
+- `tests/migrations.html`：データ形式の移行の仕組み（適用・失敗時の中止・元データ保全・移行前の自動バックアップ）
+- `tests/year-data.html`：2頭×365日のダミーデータで、表示クエリ3秒以内と往復の復元を確認（1年分テスト）
+- `tests/persistence.html`：記録を書いてブラウザを完全に閉じ、開き直して残っているかを確認（強制終了テスト、2段階の手動手順）
 - `tests/quiz-distribution.html`：性格診断の総当たり（3の10乗通り）でタイプ分布を確認
 - `tests/error-gallery.html`：エラー表示の一覧（スクリーンショット用）
 

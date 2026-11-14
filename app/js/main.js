@@ -17,13 +17,16 @@ import * as settings from "./views/settings.js";
 import * as importView from "./views/import.js";
 import * as customItems from "./views/custom-items.js";
 import * as trashView from "./views/trash-view.js";
+import * as legal from "./views/legal.js";
 
 export const app = {
   pets: [],
+  allPets: [],
   currentPetId: null,
   get currentPet() { return this.pets.find((p) => p.id === this.currentPetId) || this.pets[0] || null; },
   async reloadPets() {
-    this.pets = await Pets.all();
+    this.allPets = await Pets.all();
+    this.pets = this.allPets.filter((p) => !p.archived);
     const saved = await Device.get("currentPetId", null);
     if (!this.pets.some((p) => p.id === this.currentPetId)) this.currentPetId = this.pets[0]?.id || null;
     else if (saved && this.pets.some((p) => p.id === saved)) this.currentPetId = saved;
@@ -78,6 +81,8 @@ async function boot() {
   route("/import", (r, p) => importView.render(r, p));
   route("/custom", (r, p) => customItems.render(r, p));
   route("/trash", (r, p) => trashView.render(r, p));
+  route("/privacy", (r, p) => legal.renderPrivacy(r, p));
+  route("/terms", (r, p) => legal.renderTerms(r, p));
 
   const { path } = parseHash();
   if (!app.pets.length && path !== "/onboarding" && path !== "/import") go("/onboarding");

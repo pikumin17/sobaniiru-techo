@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>強制終了テスト｜そばにいる手帳</title>
+<style>body{font-family:sans-serif;padding:16px;line-height:1.7} .ok{color:#2e6f5e;font-weight:bold} .ng{color:#b3261e;font-weight:bold}</style>
+</head>
+<body>
+<h1>強制終了しても記録が残るか（チェックリスト II-2）</h1>
+<p>テスト専用DBだけを使います。手順：</p>
+<ol>
+<li>下のボタンを押して、テストの記録を1件書きます。</li>
+<li>このタブ（スマホならブラウザ自体）を<strong>完全に閉じて</strong>ください。そのまま端末の電源を切ってもらっても構いません。</li>
+<li>もう一度このページを開くと、記録が残っているか自動で確認します。</li>
+</ol>
+<button id="write" style="min-height:48px;padding:10px 20px;font-size:16px">テストの記録を書く</button>
+<div id="log"></div>
+<script type="module">
+import { setDBName, deleteDatabase, idbGetAll } from "../app/js/db/idb.js";
+import { Pets, Records } from "../app/js/db/repo.js";
+const PDB = "sobaniiru-techo-test-persist";
+const MARK = "sobaniiru-persist-marker";
+const log = document.getElementById("log");
+const line = (msg, ok) => { log.innerHTML += `<div class="${ok === true ? "ok" : ok === false ? "ng" : ""}">${msg}</div>`; };
+
+(async () => {
+  const marker = localStorage.getItem(MARK);
+  if (!marker) { line("まだテスト記録は書かれていません。上のボタンから始めてください。"); return; }
+  setDBName(PDB);
+  try {
+    const recs = await idbGetAll("records");
+    const found = recs.find((r) => r.id === marker);
+    if (found) {
+      line(`復帰確認: 閉じる前に書いた記録（${found.date} ${found.time}／食事:${found.meal}）が残っています … OK`, true);
+      line("結果: PASS（強制終了・電池切れのあとでも、直前の記録はIndexedDBに残ります）", true);
+      localStorage.removeItem(MARK);
+      await deleteDatabase(PDB);
+      line("テスト専用DBは消去しました。本番のデータには触っていません。");
+    } else {
+      line("記録が見つかりませんでした … NG", false);
+      line("結果: FAIL", false);
+    }
+  } catch (e) {
+    line(`例外: ${e && e.message ? e.message : e}`, false);
+  }
+})();
+
+document.getElementById("write").addEventListener("click", async () => {
+  log.innerHTML = "";
+  setDBName(PDB);
+  await deleteDatabase(PDB);
+  const pet = await Pets.save({ name: "テストの子", species: "dog", birthYear: 2016, birthMonth: 4, birthDay: 1, conditionsMemo: "", clinicMemo: "", color: "aka", order: 0 });
+  const rec = await Records.save({ id: null, petId: pet.id, date: "2026-11-14", time: "08:00", meal: "all", water: "normal", pee: "yes", poop: "yes", poopState: "normal", weightKg: 4.2, note: "強制終了テスト", custom: {}, batchId: null });
+  localStorage.setItem(MARK, rec.id);
+  line(`書きました（記録ID: ${rec.id.slice(0, 8)}…）。保存はIndexedDBのトランザクション完了まで待って確定しています。`);
+  line("では、このタブ／ブラウザを完全に閉じてから、もう一度このページを開いてください。");
+});
+</script>
+</body>
+</html>

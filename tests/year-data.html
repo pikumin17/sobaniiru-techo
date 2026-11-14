@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1年分データテスト｜そばにいる手帳</title>
+<style>body{font-family:sans-serif;padding:16px;line-height:1.7} .ok{color:#2e6f5e;font-weight:bold} .ng{color:#b3261e;font-weight:bold} pre{background:#f6f2e8;padding:10px;overflow:auto}</style>
+</head>
+<body>
+<h1>1年分のダミーデータでのテスト（チェックリスト II-11・II-13）</h1>
+<p>テスト専用DBだけを使います。2頭×365日分の記録と投薬の記録を作り、
+(1) 1年分の表示用クエリが3秒以内か、(2) 書き出し→全削除→読み込みで全件戻るか（II-11「元に戻せるか」）を確かめます。</p>
+<button id="run" style="min-height:48px;padding:10px 20px;font-size:16px">テストを実行</button>
+<div id="log"></div>
+<script type="module">
+import { setDBName, deleteDatabase, withTx, storePut, storeGetAll, storeDelete } from "../app/js/db/idb.js";
+import { TEST_DB_NAME } from "../app/js/config.js";
+import { buildExport, importData, countAll } from "../app/js/db/backup.js";
+import { Records, uuid } from "../app/js/db/repo.js";
+import { EXPORT_STORES } from "../app/js/db/schema.js";
+
+const log = document.getElementById("log");
+const line = (msg, ok) => { log.innerHTML += `<div class="${ok === true ? "ok" : ok === false ? "ng" : ""}">${msg}</div>`; };
+const iso = (d) => d.toISOString();
+const dateStr = (d) => { const p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+
+document.getElementById("run").addEventListener("click", async () => {
+  log.innerHTML = "";
+  try {
+    setDBName(TEST_DB_NAME);
+    await deleteDatabase(TEST_DB_NAME);
+    const now = iso(new Date());
+    const pets = [0, 1].map((i) => ({
+      id: uuid(), name: `テストの子${i + 1}`, species: i ? "cat" : "dog",
+      birthYear: 2016, birthMonth: 4, birthDay: 1, conditionsMemo: "テスト", clinicMemo: "",
+      color: i ? "ao" : "aka", order: i, createdAt: now, updatedAt: now,
+    }));
+    const schedules = pets.map((p, i) => ({
+      id: uuid(), petId: p.id, kind: "med", title: "テストのお薬", memo: "",
+      slots: [{ key: "asa", label: "朝", time: "08:00" }],
+      repeat: { type: "daily", weekdays: [] }, startDate: "2025-11-14", endDate: null,
+      visitDate: null, visitTime: null, placeMemo: "", createdAt: now, updatedAt: now,
+    }));
+    const records = [], doses = [];
+    const meals = ["all", "half", "little", "none"];
+    const start = new Date(2025, 10, 14); // 2025-11-14 から 365 日
+    for (let d = 0; d < 365; d++) {
+      const day = new Date(start); day.setDate(start.getDate() + d);
+      const ds = dateStr(day);
+      for (let i = 0; i < pets.length; i++) {
+        records.push({
+          id: uuid(), petId: pets[i].id, date: ds, time: "08:30",
+          meal: meals[(d + i) % 4], water: "normal", pee: "yes", poop: d % 3 ? "yes" : "no",
+          poopState: d % 3 ? "normal" : null, weightKg: Math.round((4 + i + (d % 30) * 0.01) * 100) / 100,
+          note: d % 7 ? "" : "よく寝ていた", custom: {}, batchId: null, createdAt: now, updatedAt: now,
+        });
+        doses.push({
+          id: `${schedules[i].id}_${ds}_asa`, scheduleId: schedules[i].id, petId: pets[i].id,
+          date: ds, slotKey: "asa", doneAt: now, titleSnapshot: "テストのお薬", slotLabelSnapshot: "朝",
+        });
+      }
+    }
+    const t0 = performance.now();
+    await withTx(["pets", "schedules", "records", "doses"], "readwrite", async (tx) => {
+      for (const p of pets) await storePut(tx, "pets", p);
+      for (const s of schedules) await storePut(tx, "schedules", s);
+      for (const r of records) await storePut(tx, "records", r);
+      for (const d of doses) await storePut(tx, "doses", d);
+    });
+    line(`生成: 子2頭・記録${records.length}件・投薬の記録${doses.length}件 を ${(performance.now() - t0).toFixed(0)}ms で投入`);
+    const counts1 = await countAll();
+    line(`件数: ${JSON.stringify(counts1)}`, counts1.records === 730 && counts1.doses === 730);
+    // (1) 1年分の表示用クエリ速度（II-13: 3秒以内）
+    const q0 = performance.now();
+    const range = await Records.byPetRange(pets[0].id, "2025-11-14", "2026-11-13");
+    const qms = performance.now() - q0;
+    line(`(1) 1年分クエリ: ${range.length}件を ${qms.toFixed(0)}ms で取得 … ${qms < 3000 ? "OK（3秒以内）" : "NG"}`, range.length === 365 && qms < 3000);
+    // (2) 書き出し→全削除→読み込みで戻るか（II-11）
+    const exported = await buildExport();
+    const sizeKB = Math.round(JSON.stringify(exported).length / 1024);
+    await withTx([...EXPORT_STORES], "readwrite", async (tx) => {
+      for (const s of EXPORT_STORES) for (const row of await storeGetAll(tx, s)) await storeDelete(tx, s, row.id ?? row.key);
+    });
+    const empty = await countAll();
+    line(`全削除後: ${JSON.stringify(empty)}`, Object.values(empty).every((n) => n === 0));
+    const r2 = await importData(JSON.parse(JSON.stringify(exported)), "replace");
+    const counts2 = await countAll();
+    const back = JSON.stringify(counts1) === JSON.stringify(counts2);
+    line(`(2) 往復: 書き出し ${sizeKB}KB → 読み込み ${r2.ok ? "成功" : "失敗"} → 件数一致 ${back ? "OK" : "NG"}`, r2.ok && back);
+    line(back && qms < 3000 ? "結果: PASS（1年分でも戻せて、表示も3秒以内）" : "結果: FAIL", back && qms < 3000);
+  } catch (e) {
+    line(`例外: ${e && e.message ? e.message : e}`, false);
+  }
+});
+</script>
+</body>
+</html>

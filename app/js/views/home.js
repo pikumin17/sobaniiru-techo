@@ -31,11 +31,21 @@ export async function render(root) {
   }
 
   const undone = tasks.filter((x) => !x.done);
+  // II-6: Safariの7日ルール対策として、ホーム画面への追加を案内する（追加済み・閉じて30日以内は出さない）
+  const isStandalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+  const guideDismissedAt = await Device.get("homeGuideDismissedAt", null);
+  const showGuide = !isStandalone && (!guideDismissedAt || diffDays(localDate(new Date(guideDismissedAt)), t) >= 30);
   root.innerHTML = `
     ${petHeaderHTML(app.pets, pet.id)}
     ${showNudge ? `<div class="banner banner-warn">バックアップをしばらく書き出していません。機種変更や故障で記録が消えないよう、書き出しておきましょう。<br>
       <button class="btn btn-sm btn-primary" id="nudge-export" style="margin-top:8px">今すぐ書き出す</button>
       <button class="btn btn-sm btn-ghost" id="nudge-later">あとで</button></div>` : ""}
+    ${showGuide ? `<div class="card">
+      <h2>📱 ホーム画面に追加してください</h2>
+      <p>iPhoneのSafariは、7日間使わなかったサイトのデータを消すことがあります。ホーム画面に追加すると、その対象から外れて記録が消えにくくなります。</p>
+      <p class="small">iPhone：共有ボタン（□に↑のマーク）→「ホーム画面に追加」<br>Android：右上の「︙」メニュー→「ホーム画面に追加」</p>
+      <button class="btn btn-sm btn-ghost" id="guide-close">閉じる（30日後にまた表示します）</button>
+    </div>` : ""}
     <div class="card">
       <h2>今日（${fmtJP(t)}）の予定</h2>
       <p class="notice-line">⚠️ ${M.noNotifyNotice}</p>
@@ -84,6 +94,9 @@ export async function render(root) {
       }
       rerender();
     }));
+  root.querySelector("#guide-close")?.addEventListener("click", async () => {
+    await Device.set("homeGuideDismissedAt", new Date().toISOString()); rerender();
+  });
   root.querySelector("#nudge-export")?.addEventListener("click", async () => {
     const { downloadExport } = await import("../db/backup.js");
     await downloadExport(); rerender();

@@ -1,7 +1,8 @@
 // A2 記録入力（1画面で素早く付ける／複数ペット一括／過去日の修正）
 import { app } from "../main.js";
 import { go, rerender } from "../router.js";
-import { Records, Schedules, Doses, CustomItems, markDataSince } from "../db/repo.js";
+import { Records, Schedules, Doses, CustomItems, Device, markDataSince } from "../db/repo.js";
+import { idbDelete } from "../db/idb.js";
 import { deleteRecord } from "../db/trash.js";
 import { todaysMedTasks } from "../domain/reminders.js";
 import { today, nowTime } from "../domain/dates.js";
@@ -61,6 +62,7 @@ export async function render(root, params) {
     const tasks = todaysMedTasks(schedules, doses, dateStr);
     if (!tasks.length) return "";
     return `<div class="field"><span class="label">お薬（${escapeHtml(p.name)}）</span>
+      <p class="small">ここに出るお薬は、予定に登録した「獣医師の指示」どおりの内容です。</p>
       ${tasks.map((x) => `<div class="checkrow">
         <input type="checkbox" id="dose-${p.id}-${x.slot.key}" data-dose-pet="${p.id}" data-sid="${x.schedule.id}" data-slot="${x.slot.key}" ${x.done ? "checked" : ""}>
         <label for="dose-${p.id}-${x.slot.key}">${escapeHtml(x.schedule.title)}${x.slot.label ? `（${escapeHtml(x.slot.label)}）` : ""}${x.slot.time ? ` ${x.slot.time}` : ""}</label></div>`).join("")}
@@ -91,9 +93,9 @@ export async function render(root, params) {
       <button type="submit" class="btn btn-primary btn-block">${batch ? `${app.pets.length}頭分を保存する` : existing ? "変更を保存する" : "保存する"}</button>
       ${existing ? `<button type="button" class="btn btn-danger btn-block" id="del">この記録を消す</button>` : ""}
     </form>
-    <p class="notice-line">${M.vetNotice}</p>
+    <p class="notice-line">${M.vetNotice}<br><strong>${M.vetDisclaimer}</strong></p>
   `;
-  bindPetTabs(root, async (id) => { await app.switchPet(id); rerender(); });
+  bindPetTabs(root, async (id) => { clearTimeout(draftTimer); await saveDraftNow(); await app.switchPet(id); rerender(); });
   bindChoices(root);
   root.querySelectorAll("[data-ci-group]").forEach((g) => g.addEventListener("click", (e) => {
     const b = e.target.closest(".choice"); if (!b) return;
@@ -109,6 +111,83 @@ export async function render(root, params) {
   };
   await renderMed();
   root.querySelector("#f-date").addEventListener("change", renderMed);
+
+  // II-1: 入力の途中を端末内に自動保存し、離れても（強制終了でも）戻れるようにする
+  const draftKey = `recordDraft:${batch ? "batch" : editId ? `edit:${editId}` : `new:${pet.id}`}`;
+  const formEl = root.querySelector("#rec-form");
+  const gatherDraft = () => {
+    const custom = {};
+    root.querySelectorAll("[data-ci]").forEach((el) => {
+      custom[`${el.dataset.pet}:${el.dataset.ci}`] = el.type === "checkbox" ? el.checked : el.value;
+    });
+    root.querySelectorAll("[data-ci-group]").forEach((g) => {
+      custom[`${g.dataset.pet}:${g.dataset.ciGroup}`] = g.querySelector(".choice.selected")?.dataset.value || null;
+    });
+    return {
+      date: root.querySelector("#f-date")?.value || "",
+      time: root.querySelector("#f-time")?.value || "",
+      weight: root.querySelector("#f-weight")?.value || "",
+      note: root.querySelector("#f-note")?.value || "",
+      meal: groupValue(root, "meal"), water: groupValue(root, "water"),
+      pee: groupValue(root, "pee"), poop: groupValue(root, "poop"), poopState: groupValue(root, "poopState"),
+      custom,
+      doses: [...root.querySelectorAll("[data-dose-pet]")].map((b) => ({ pet: b.dataset.dosePet, sid: b.dataset.sid, slot: b.dataset.slot, checked: b.checked })),
+    };
+  };
+  const draftHasContent = (d) => !!d && (d.meal || d.water || d.pee || d.poop || (d.weight || "").trim() || (d.note || "").trim()
+    || Object.values(d.custom || {}).some((v) => v === true || (v != null && String(v).trim() !== ""))
+    || (d.doses || []).some((x) => x.checked));
+  let draftTimer = null;
+  const saveDraftNow = async () => {
+    if (!formEl.isConnected) return;
+    try {
+      const d = gatherDraft();
+      if (draftHasContent(d) || editId) await Device.set(draftKey, { savedAt: new Date().toISOString(), data: d });
+      else await idbDelete("device", draftKey);
+    } catch { /* 下書き保存はベストエフォート */ }
+  };
+  const queueDraft = () => { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraftNow, 400); };
+  formEl.addEventListener("input", queueDraft);
+  formEl.addEventListener("change", queueDraft);
+  root.querySelectorAll(".choice").forEach((c) => c.addEventListener("click", () => setTimeout(queueDraft, 0)));
+  window.addEventListener("pagehide", saveDraftNow);
+  try {
+    const savedDraft = await Device.get(draftKey, null);
+    if (savedDraft?.data && draftHasContent(savedDraft.data)) {
+      const d = savedDraft.data;
+      const setGroup = (name, val) => {
+        const g = root.querySelector(`[data-group="${name}"]`); if (!g) return;
+        g.querySelectorAll(".choice").forEach((c) => c.classList.toggle("selected", c.dataset.value === val));
+      };
+      if (!editId) {
+        if (d.date) root.querySelector("#f-date").value = d.date;
+        if (d.time) root.querySelector("#f-time").value = d.time;
+      }
+      root.querySelector("#f-weight").value = d.weight || "";
+      root.querySelector("#f-note").value = d.note || "";
+      setGroup("meal", d.meal); setGroup("water", d.water); setGroup("pee", d.pee);
+      setGroup("poop", d.poop); setGroup("poopState", d.poopState); togglePoopState(root);
+      for (const [k, v] of Object.entries(d.custom || {})) {
+        const [pid, itemId] = k.split(":");
+        const el = root.querySelector(`[data-ci="${itemId}"][data-pet="${pid}"]`);
+        if (el) { if (el.type === "checkbox") el.checked = !!v; else el.value = v ?? ""; continue; }
+        const g = root.querySelector(`[data-ci-group="${itemId}"][data-pet="${pid}"]`);
+        if (g) g.querySelectorAll(".choice").forEach((c) => c.classList.toggle("selected", c.dataset.value === v));
+      }
+      if (!editId && d.date && d.date !== date0) await renderMed();
+      for (const x of d.doses || []) {
+        const b = root.querySelector(`[data-dose-pet="${x.pet}"][data-sid="${x.sid}"][data-slot="${x.slot}"]`);
+        if (b) b.checked = !!x.checked;
+      }
+      const banner = document.createElement("div");
+      banner.className = "banner banner-info";
+      banner.innerHTML = `入力の途中は自動で保存されています。前回の途中入力を復元しました。 <button type="button" class="btn btn-sm btn-ghost" id="draft-clear">破棄する</button>`;
+      formEl.parentElement.insertBefore(banner, formEl);
+      banner.querySelector("#draft-clear").addEventListener("click", async () => {
+        await idbDelete("device", draftKey); rerender();
+      });
+    }
+  } catch { /* 復元できなくても通常の入力は続けられる */ }
 
   root.querySelector("#del")?.addEventListener("click", async () => {
     const ok = await confirmDialog({ title: "この記録を消しますか？", body: "消しても、しばらくの間は設定の「ごみ箱」から元に戻せます。", okLabel: "消す", danger: true });
@@ -189,13 +268,22 @@ export async function render(root, params) {
       showError(errEl, describeDbError(err));
       return;
     }
+    await idbDelete("device", draftKey).catch(() => {});
     if (batch) {
       toast(`${app.pets.length}頭分を記録しました`, { actionLabel: "取り消す", ms: 6000, onAction: async () => {
         for (const id of createdIds) await Records.remove(id);
         rerender();
       }});
+    } else if (existing) {
+      const prevSnapshot = JSON.parse(JSON.stringify(existing));
+      toast("変更を保存しました", { actionLabel: "取り消す", ms: 6000, onAction: async () => {
+        await Records.save(prevSnapshot); rerender();
+      }});
     } else {
-      toast("保存しました");
+      toast("保存しました", { actionLabel: "取り消す", ms: 6000, onAction: async () => {
+        for (const id of createdIds) await Records.remove(id);
+        rerender();
+      }});
     }
     go("/");
   });

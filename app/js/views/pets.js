@@ -3,7 +3,7 @@ import { app } from "../main.js";
 import { go, rerender } from "../router.js";
 import { Pets, Records, markDataSince } from "../db/repo.js";
 import { deletePet } from "../db/trash.js";
-import { today } from "../domain/dates.js";
+import { today, nowISO } from "../domain/dates.js";
 import { escapeHtml } from "../ui/pet-header.js";
 import { confirmDialog } from "../ui/dialog.js";
 import { toast } from "../ui/toast.js";
@@ -11,15 +11,30 @@ import { showError, clearError } from "../ui/errors.js";
 import { M } from "../messages.ja.js";
 
 export async function renderList(root) {
+  const allPets = await Pets.all();
+  const active = allPets.filter((p) => !p.archived);
+  const archived = allPets.filter((p) => p.archived);
+  const row = (p, extra = "") => `<div class="list-row">
+      <span><span class="pet-dot dot-${p.color}"></span> ${p.species === "dog" ? "🐶" : "🐱"} <strong>${escapeHtml(p.name)}</strong></span>
+      <span><button class="btn btn-sm" data-edit="${p.id}">編集</button>${extra}</span></div>`;
   root.innerHTML = `
     <h1>子の一覧</h1>
-    ${app.pets.map((p) => `<div class="list-row">
-      <span><span class="pet-dot dot-${p.color}"></span> ${p.species === "dog" ? "🐶" : "🐱"} <strong>${escapeHtml(p.name)}</strong></span>
-      <button class="btn btn-sm" data-edit="${p.id}">編集</button></div>`).join("") || `<p>まだ登録がありません。</p>`}
+    ${active.map((p) => row(p)).join("") || `<p>まだ登録がありません。</p>`}
     <button class="btn btn-primary btn-block" id="add">＋ 子を追加する</button>
+    ${archived.length ? `<h2>🌈 お空の子（記録は保管中）</h2>
+    <p class="small">お空へ行った子の記録です。消さずにしまってあり、内容はすべて残っています。</p>
+    ${archived.map((p) => row(p, ` <button class="btn btn-sm" data-unarchive="${p.id}">戻す</button>`)).join("")}` : ""}
     <p><a href="#/settings">← 設定に戻る</a></p>`;
   root.querySelector("#add").addEventListener("click", () => go("/pet-edit"));
   root.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => go(`/pet-edit?id=${b.dataset.edit}`)));
+  root.querySelectorAll("[data-unarchive]").forEach((b) => b.addEventListener("click", async () => {
+    const p = await Pets.get(b.dataset.unarchive);
+    if (!p) return;
+    await Pets.save({ ...p, archived: false, archivedAt: null });
+    await app.reloadPets();
+    toast("戻しました");
+    rerender();
+  }));
 }
 
 export async function renderEdit(root, params) {
@@ -54,6 +69,9 @@ export async function renderEdit(root, params) {
         <textarea id="p-clinic" placeholder="例：○○動物病院、夜間は△△病院 など">${escapeHtml(pet?.clinicMemo || "")}</textarea></div>
       <button type="submit" class="btn btn-primary btn-block">保存する</button>
     </form>
+    ${pet?.archived ? `<div class="banner banner-info">🌈 この子は「お空の子」として保管中です。記録は消えずに残っています。</div>` : ""}
+    ${pet && !pet.archived ? `<hr class="hr"><button type="button" class="btn btn-block" id="archive-pet">🌈 お空へ行ったので、記録をしまう</button>
+      <p class="small">消さずに保管します。一覧や毎日の記録からは外れますが、記録は全部残り、「子の一覧」からいつでも戻せます。</p>` : ""}
     ${pet ? `<hr class="hr"><button class="btn btn-danger btn-block" id="del-pet">この子の登録と記録をすべて消す</button>
       <p class="small">消しても、しばらくの間は設定の「ごみ箱」から元に戻せます。</p>` : ""}
     <p class="notice-line">${M.vetNotice}</p>`;
@@ -68,6 +86,14 @@ export async function renderEdit(root, params) {
     const w = recs.filter((r) => r.weightKg != null);
     root.querySelector("#cur-weight").textContent = w.length ? `${w[w.length - 1].weightKg}kg（${w[w.length - 1].date}の記録）` : "まだ体重の記録がありません";
     root.querySelector("#to-record").addEventListener("click", async () => { await app.switchPet(pet.id); go("/record"); });
+    root.querySelector("#archive-pet")?.addEventListener("click", async () => {
+      const ok = await confirmDialog({ title: `${pet.name}の記録をしまいますか？`, body: "記録は消えません。一覧や毎日の記録からは外れますが、「子の一覧」からいつでも戻せます。", okLabel: "しまう" });
+      if (!ok) return;
+      await Pets.save({ ...pet, archived: true, archivedAt: nowISO() });
+      await app.reloadPets();
+      toast("記録をしまいました（消えていません）");
+      go("/pets");
+    });
     root.querySelector("#del-pet").addEventListener("click", async () => {
       const ok = await confirmDialog({ title: `${pet.name}の登録と記録をすべて消しますか？`, body: "記録・予定・投薬の記録も一緒にごみ箱へ移ります。しばらくの間は元に戻せます。", okLabel: "消す", danger: true });
       if (!ok) return;

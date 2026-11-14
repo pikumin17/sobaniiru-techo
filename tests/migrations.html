@@ -8,14 +8,18 @@
 </head>
 <body>
 <h1>データ形式の移行（マイグレーション）テスト</h1>
-<p>現行は形式バージョン1のみです。ここでは「次の版が来てもデータが消えない」仕組みそのものを検証します：
-(1) 現行版の読み込み変換がデータを変えないこと、(2) 仮のv2移行が適用されること、(3) 移行が失敗したら読み込み全体が中止され、元のデータに触れないこと。</p>
+<p>「次の版が来てもデータが消えない」仕組みを検証します：
+(1) 現行版の読み込み変換がデータを変えないこと、(2) 仮のv2移行が適用されること、(3) 移行が失敗したら読み込み全体が中止され、元のデータに触れないこと、
+(4) 実際のDB版上げ（v1→v2）で、移行<strong>前</strong>のデータが backups に自動で控えられ、元のデータも残ること（チェックリスト II-7）。</p>
 <button id="run" style="min-height:48px;padding:10px 20px;font-size:16px">テストを実行</button>
 <div id="log"></div>
 <script type="module">
 import { transformImported, MIGRATIONS } from "../app/js/db/migrations.js";
+import { setDBName, deleteDatabase, openDB, idbGetAll } from "../app/js/db/idb.js";
+import { STORES } from "../app/js/db/schema.js";
 const log = document.getElementById("log");
 const line = (msg, ok) => { log.innerHTML += `<div class="${ok ? "ok" : "ng"}">${msg}</div>`; };
+const ORIG_LEN = MIGRATIONS.length;
 document.getElementById("run").addEventListener("click", async () => {
   log.innerHTML = "";
   const fixture = await (await fetch("./fixtures/v1-sample.json")).json();
@@ -24,23 +28,58 @@ document.getElementById("run").addEventListener("click", async () => {
   const same = transformImported(JSON.parse(JSON.stringify(data)), 1);
   line(`(1) v1→現行: データ不変 ${JSON.stringify(same) === JSON.stringify(data) ? "OK" : "NG"}`,
     JSON.stringify(same) === JSON.stringify(data));
-  // (2) 仮のv2移行（pets に仮フィールドを足す変換）を一時的に差して適用されるか
-  MIGRATIONS.push({ to: 2, upgrade() {}, transform: { pets: (p) => ({ ...p, __v2mark: true }) } });
+  // (2) 仮の移行（pets に仮フィールドを足す変換）を一時的に差して適用されるか
+  MIGRATIONS.push({ to: 90, upgrade() {}, transform: { pets: (p) => ({ ...p, __vmark: true }) } });
   try {
     const migrated = transformImported(JSON.parse(JSON.stringify(data)), 1);
-    const ok = migrated.pets.every((p) => p.__v2mark === true) && migrated.records.length === data.records.length;
-    line(`(2) 仮v2移行: petsに変換が適用され、他ストアは保持 … ${ok ? "OK" : "NG"}`, ok);
+    const ok = migrated.pets.every((p) => p.__vmark === true) && migrated.records.length === data.records.length;
+    line(`(2) 仮移行: petsに変換が適用され、他ストアは保持 … ${ok ? "OK" : "NG"}`, ok);
     // (3) 失敗する移行 → 例外が伝わり、読み込み側が中止できる（元データは不変）
-    MIGRATIONS.push({ to: 3, upgrade() {}, transform: { pets: () => { throw new Error("boom"); } } });
+    MIGRATIONS.push({ to: 91, upgrade() {}, transform: { pets: () => { throw new Error("boom"); } } });
     let aborted = false;
     const snapshot = JSON.stringify(data);
     try { transformImported(JSON.parse(JSON.stringify(data)), 1); } catch { aborted = true; }
     line(`(3) 移行失敗時: 例外で中止され、元データは不変 … ${aborted && JSON.stringify(data) === snapshot ? "OK" : "NG"}`,
       aborted && JSON.stringify(data) === snapshot);
   } finally {
-    MIGRATIONS.length = 1; // 仮移行を取り除く
+    MIGRATIONS.length = ORIG_LEN; // 仮移行を取り除く
   }
-  line("結果: 移行の仕組み（適用・失敗時中止・元データ保全）を確認", true);
+  // (4) 実DBで v1→v2 へ上げ、移行前バックアップ（II-7）が取れるか
+  try {
+    const MIG_DB = "sobaniiru-techo-test-mig";
+    await deleteDatabase(MIG_DB);
+    const db1 = await new Promise((resolve, reject) => {
+      const req = indexedDB.open(MIG_DB, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        for (const [name, def] of Object.entries(STORES)) {
+          if (name === "backups") continue; // v1の時点では backups は無い
+          const st = db.createObjectStore(name, { keyPath: def.keyPath });
+          for (const ix of def.indexes) st.createIndex(ix.name, ix.keyPath);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = db1.transaction(["pets", "records"], "readwrite");
+      for (const p of fixture.data.pets) tx.objectStore("pets").put(p);
+      for (const r of fixture.data.records) tx.objectStore("records").put(r);
+      tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+    });
+    db1.close();
+    setDBName(MIG_DB);
+    await openDB(); // DB_VERSION=2 への移行が走る
+    const backups = await idbGetAll("backups");
+    const petsNow = await idbGetAll("pets");
+    const snap = backups.find((b) => b.kind === "preMigration");
+    const ok = !!snap && snap.data.pets.length === fixture.data.pets.length && petsNow.length === fixture.data.pets.length;
+    line(`(4) 移行前バックアップ: ${snap ? `あり（子${snap.data.pets.length}件・記録${snap.data.records.length}件を控え）` : "なし"}／移行後も子は${petsNow.length}件残存 … ${ok ? "OK" : "NG"}`, ok);
+    await deleteDatabase(MIG_DB);
+  } catch (e) {
+    line(`(4) 移行前バックアップ: 例外 ${e && e.message ? e.message : e} … NG`, false);
+  }
+  line("結果: 移行の仕組み（適用・失敗時中止・元データ保全・移行前バックアップ）を確認", true);
 });
 </script>
 </body>

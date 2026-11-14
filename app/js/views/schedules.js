@@ -58,7 +58,8 @@ export async function renderEdit(root, params) {
     <div class="error-box" id="err"></div>
     <form id="s-form">
       <input type="hidden" id="s-kind" value="${kind}">
-      <div class="field"><label for="s-title">${kind === "med" ? "お薬の名前" : "通院の名前"}（必須）</label>
+      ${kind === "med" ? `<p class="notice-line">💊 出どころは「獣医師の指示」です。${M.medSourceNotice}。</p>` : ""}
+      <div class="field"><label for="s-title">${kind === "med" ? "お薬の名前（獣医師の指示どおりに）" : "通院の名前"}（必須）</label>
         <input type="text" id="s-title" value="${escapeHtml(s?.title || "")}" placeholder="${kind === "med" ? "例：腎臓のお薬" : "例：定期検診"}" autocomplete="off"></div>
       <div class="field"><label for="s-memo">メモ</label>
         <textarea id="s-memo" placeholder="例：ごはんに混ぜる、など">${escapeHtml(s?.memo || "")}</textarea></div>

@@ -1,5 +1,5 @@
 // Service Worker（classic script・範囲は /app/ のみ）
-var CACHE = "sobaniiru-techo-v1";
+var CACHE = "sobaniiru-techo-v2";
 var CORE = [
   "./", "./index.html", "./manifest.webmanifest",
   "./css/base.css", "./css/components.css", "./css/print.css",

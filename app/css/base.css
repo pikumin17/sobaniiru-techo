@@ -1,5 +1,6 @@
 :root{
-  --bg:#fdf8f0; --ink:#33302a; --muted:#6f6a5e; --line:#e4dccb;
+  --bg:#fdf8f0; --ink:#33302a; --muted:#6f6a5e; --line:#867c68;
+  --surface:#fff; --surface2:#fffdf8; --th-bg:#f6efe0;
   --primary:#b3541e; --primary-ink:#fff; --accent:#2e6f5e;
   --danger:#b3261e; --warn-bg:#fff3cd; --warn-line:#e3c766;
   --radius:14px;
@@ -14,7 +15,7 @@ body{ margin:0; background:var(--bg); color:var(--ink);
   font-family:"Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;
   line-height:1.6; padding-bottom:96px; }
 .app-header{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
-  padding:12px 16px; border-bottom:2px solid var(--line); background:#fffdf8;
+  padding:12px 16px; border-bottom:2px solid var(--line); background:var(--surface2);
   position:sticky; top:0; z-index:20; }
 .app-logo{ font-size:1.35rem; font-weight:700; color:var(--primary); text-decoration:none; }
 .vet-notice{ font-size:.85rem; color:var(--muted); }
@@ -27,7 +28,7 @@ h2{ font-size:1.2rem; margin:1.2em 0 .5em; }
 p.lead{ font-size:1.05rem; }
 .small{ font-size:.9rem; color:var(--muted); }
 .tabbar{ position:fixed; left:0; right:0; bottom:0; z-index:30; display:flex;
-  background:#fffdf8; border-top:2px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+  background:var(--surface2); border-top:2px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
 .tabbar a{ flex:1; text-align:center; padding:8px 2px 6px; color:var(--ink);
   text-decoration:none; font-size:1.15rem; line-height:1.25; }
 .tabbar a span{ display:block; font-size:.78rem; }
