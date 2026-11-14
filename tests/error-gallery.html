@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>エラー表示ギャラリー（スクリーンショット用）｜そばにいる手帳</title>
+<link rel="stylesheet" href="../app/css/base.css">
+<link rel="stylesheet" href="../app/css/components.css">
+</head>
+<body>
+<main class="view">
+<h1>エラー表示の一覧</h1>
+<p class="small">納品スクリーンショット用。実際に再現できるもの（ファイル読み込み系）はアプリの読み込み画面でも確認できます。</p>
+<div id="list"></div>
+</main>
+<script type="module">
+import { M } from "../app/js/messages.ja.js";
+const names = {
+  saveFailed: "保存に失敗したとき", quota: "空き容量が足りないとき",
+  notPersisted: "データの保護ができない環境のとき", loadFailed: "読み込みファイルが壊れているとき",
+  tooNew: "新しい版のファイルを読んだとき", migrationFailed: "データ形式の移行に失敗したとき",
+  blocked: "ほかのタブで開かれているとき", emptyRecord: "何も入力せずに保存しようとしたとき",
+  nameRequired: "名前が空のとき", badWeight: "体重の入力が数字でないとき",
+};
+const list = document.getElementById("list");
+for (const [key, label] of Object.entries(names)) {
+  const h = document.createElement("h2"); h.textContent = label;
+  const d = document.createElement("div"); d.className = "error-box show"; d.textContent = M.errors[key];
+  list.appendChild(h); list.appendChild(d);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja" data-font="normal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; connect-src 'self'; style-src 'self'; script-src 'self'">
+<title>そばにいる手帳</title>
+<meta name="description" content="シニアの犬・猫の毎日の介護記録。食事・投薬・通院の予定と申し送り。データは端末の中だけに保存されます。">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#fdf8f0">
+<link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./css/base.css">
+<link rel="stylesheet" href="./css/components.css">
+<link rel="stylesheet" href="./css/print.css" media="print">
+</head>
+<body>
+<header class="app-header">
+  <a class="app-logo" href="#/">そばにいる手帳</a>
+  <span class="vet-notice">体調の判断は必ず獣医師へ</span>
+</header>
+<div id="persist-note" class="persist-note" role="alert"></div>
+<main id="view" class="view"></main>
+<nav class="tabbar" aria-label="主な画面">
+  <a href="#/" data-nav="/">🏠<span>ホーム</span></a>
+  <a href="#/record" data-nav="/record">✏️<span>記録する</span></a>
+  <a href="#/review" data-nav="/review">📖<span>ふりかえり</span></a>
+  <a href="#/schedules" data-nav="/schedules">🗓<span>予定</span></a>
+  <a href="#/settings" data-nav="/settings">⚙️<span>設定</span></a>
+</nav>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

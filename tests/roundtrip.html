@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>往復テスト（テスト専用DB）｜そばにいる手帳</title>
+<style>body{font-family:sans-serif;padding:16px;line-height:1.7} .ok{color:#2e6f5e;font-weight:bold} .ng{color:#b3261e;font-weight:bold} pre{background:#f6f2e8;padding:10px;overflow:auto}</style>
+</head>
+<body>
+<h1>書き出し→全削除→読み込み 往復テスト</h1>
+<p>テスト専用DB（sobaniiru-techo-test）だけを使います。本番のデータには触りません。</p>
+<button id="run" style="min-height:48px;padding:10px 20px;font-size:16px">テストを実行</button>
+<div id="log"></div>
+<script type="module">
+import { setDBName, deleteDatabase } from "../app/js/db/idb.js";
+import { TEST_DB_NAME } from "../app/js/config.js";
+import { buildExport, importData, countAll } from "../app/js/db/backup.js";
+import { idbGetAll } from "../app/js/db/idb.js";
+import { EXPORT_STORES } from "../app/js/db/schema.js";
+
+const log = document.getElementById("log");
+const line = (msg, ok) => { log.innerHTML += `<div class="${ok === true ? "ok" : ok === false ? "ng" : ""}">${msg}</div>`; };
+const sortRows = (rows) => rows.map((r) => JSON.stringify(r, Object.keys(r).sort())).sort();
+const same = (a, b) => JSON.stringify(sortRows(a)) === JSON.stringify(sortRows(b));
+
+document.getElementById("run").addEventListener("click", async () => {
+  log.innerHTML = "";
+  try {
+    setDBName(TEST_DB_NAME);
+    await deleteDatabase(TEST_DB_NAME);
+    // 1) フィクスチャを読み込んで投入
+    const fixture = await (await fetch("./fixtures/v1-sample.json")).json();
+    const r1 = await importData(JSON.parse(JSON.stringify(fixture)), "replace");
+    line(`手順1 フィクスチャ投入: ${r1.ok ? "成功" : "失敗 " + (r1.errors || []).join(",")}`, r1.ok);
+    // 投入したデータ（＝正解）を控える
+    const before = {};
+    for (const s of EXPORT_STORES) before[s] = await idbGetAll(s);
+    line(`手順2 投入後の件数: ${JSON.stringify(await countAll())}`);
+    // 2) 書き出し
+    const exported = await buildExport();
+    line(`手順3 書き出し: app=${exported.app} formatVersion=${exported.formatVersion}`, exported.app === "sobaniiru-techo");
+    // 3) 全削除（テストDBごと削除して再投入で代替せず、replace読み込みの前に手で空にする）
+    const { withTx, storeGetAll, storeDelete } = await import("../app/js/db/idb.js");
+    await withTx([...EXPORT_STORES], "readwrite", async (t) => {
+      for (const s of EXPORT_STORES) for (const row of await storeGetAll(t, s)) await storeDelete(t, s, row.id ?? row.key);
+    });
+    const empty = await countAll();
+    line(`手順4 全削除後: ${JSON.stringify(empty)}`, Object.values(empty).every((n) => n === 0));
+    // 4) 読み込み
+    const r2 = await importData(JSON.parse(JSON.stringify(exported)), "replace");
+    line(`手順5 読み込み: ${r2.ok ? "成功" : "失敗"}`, r2.ok);
+    // 5) 照合（投入データ vs 読み込み後のDB）
+    let allOk = true;
+    for (const s of EXPORT_STORES) {
+      const after = await idbGetAll(s);
+      const ok = same(before[s], after);
+      if (!ok) allOk = false;
+      line(`照合 ${s}: 投入 ${before[s].length} 件 / 復元 ${after.length} 件 … ${ok ? "一致" : "不一致"}`, ok);
+    }
+    line(allOk ? "結果: PASS（全データが元通りに戻りました）" : "結果: FAIL", allOk);
+  } catch (e) {
+    line(`例外: ${e.message}`, false);
+  }
+});
+</script>
+</body>
+</html>

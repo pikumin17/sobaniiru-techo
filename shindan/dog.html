@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; connect-src 'self'; style-src 'self'; script-src 'self'">
+<title>犬の性格タイプ診断（無料・登録不要）</title>
+<meta name="description" content="10の質問で分かる、うちの犬の性格タイプ診断。無料・登録不要のおたのしみ用です。">
+<link rel="stylesheet" href="./css/quiz.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="site-head"><a href="./index.html">← 診断の入口に戻る</a></div>
+  <main id="quiz">
+    <h1>🐶 犬の性格タイプ診断</h1>
+    <p class="lead">全10問・3択です。いまの様子でも、若いころの様子でも、思い浮かぶ方で答えてください。</p>
+    <button class="btn btn-primary btn-big" id="start">診断をはじめる</button>
+    <p class="small">おたのしみ用の診断です。病気の診断ではありません。</p>
+  </main>
+</div>
+<script type="module">
+  import { DOG } from "./js/data-dog.js";
+  import { startQuiz } from "./js/quiz.js";
+  document.getElementById("start").addEventListener("click", () => startQuiz(DOG));
+</script>
+</body>
+</html>

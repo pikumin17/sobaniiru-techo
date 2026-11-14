@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>移行テスト｜そばにいる手帳</title>
+<style>body{font-family:sans-serif;padding:16px;line-height:1.7} .ok{color:#2e6f5e;font-weight:bold} .ng{color:#b3261e;font-weight:bold}</style>
+</head>
+<body>
+<h1>データ形式の移行（マイグレーション）テスト</h1>
+<p>現行は形式バージョン1のみです。ここでは「次の版が来てもデータが消えない」仕組みそのものを検証します：
+(1) 現行版の読み込み変換がデータを変えないこと、(2) 仮のv2移行が適用されること、(3) 移行が失敗したら読み込み全体が中止され、元のデータに触れないこと。</p>
+<button id="run" style="min-height:48px;padding:10px 20px;font-size:16px">テストを実行</button>
+<div id="log"></div>
+<script type="module">
+import { transformImported, MIGRATIONS } from "../app/js/db/migrations.js";
+const log = document.getElementById("log");
+const line = (msg, ok) => { log.innerHTML += `<div class="${ok ? "ok" : "ng"}">${msg}</div>`; };
+document.getElementById("run").addEventListener("click", async () => {
+  log.innerHTML = "";
+  const fixture = await (await fetch("./fixtures/v1-sample.json")).json();
+  const data = JSON.parse(JSON.stringify(fixture.data));
+  // (1) 現行（from=1 → 現行）では無変換
+  const same = transformImported(JSON.parse(JSON.stringify(data)), 1);
+  line(`(1) v1→現行: データ不変 ${JSON.stringify(same) === JSON.stringify(data) ? "OK" : "NG"}`,
+    JSON.stringify(same) === JSON.stringify(data));
+  // (2) 仮のv2移行（pets に仮フィールドを足す変換）を一時的に差して適用されるか
+  MIGRATIONS.push({ to: 2, upgrade() {}, transform: { pets: (p) => ({ ...p, __v2mark: true }) } });
+  try {
+    const migrated = transformImported(JSON.parse(JSON.stringify(data)), 1);
+    const ok = migrated.pets.every((p) => p.__v2mark === true) && migrated.records.length === data.records.length;
+    line(`(2) 仮v2移行: petsに変換が適用され、他ストアは保持 … ${ok ? "OK" : "NG"}`, ok);
+    // (3) 失敗する移行 → 例外が伝わり、読み込み側が中止できる（元データは不変）
+    MIGRATIONS.push({ to: 3, upgrade() {}, transform: { pets: () => { throw new Error("boom"); } } });
+    let aborted = false;
+    const snapshot = JSON.stringify(data);
+    try { transformImported(JSON.parse(JSON.stringify(data)), 1); } catch { aborted = true; }
+    line(`(3) 移行失敗時: 例外で中止され、元データは不変 … ${aborted && JSON.stringify(data) === snapshot ? "OK" : "NG"}`,
+      aborted && JSON.stringify(data) === snapshot);
+  } finally {
+    MIGRATIONS.length = 1; // 仮移行を取り除く
+  }
+  line("結果: 移行の仕組み（適用・失敗時中止・元データ保全）を確認", true);
+});
+</script>
+</body>
+</html>

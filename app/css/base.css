@@ -1,0 +1,40 @@
+:root{
+  --bg:#fdf8f0; --ink:#33302a; --muted:#6f6a5e; --line:#e4dccb;
+  --primary:#b3541e; --primary-ink:#fff; --accent:#2e6f5e;
+  --danger:#b3261e; --warn-bg:#fff3cd; --warn-line:#e3c766;
+  --radius:14px;
+  --dot-aka:#d9534f; --dot-ao:#4a7fb5; --dot-midori:#5da85f;
+  --dot-yamabuki:#d9a521; --dot-murasaki:#8e6cc8; --dot-chairo:#9c6b4f;
+  font-size:18px;
+}
+html[data-font="large"]{ font-size:20px; }
+html[data-font="xlarge"]{ font-size:22px; }
+*{ box-sizing:border-box; }
+body{ margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;
+  line-height:1.6; padding-bottom:96px; }
+.app-header{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
+  padding:12px 16px; border-bottom:2px solid var(--line); background:#fffdf8;
+  position:sticky; top:0; z-index:20; }
+.app-logo{ font-size:1.35rem; font-weight:700; color:var(--primary); text-decoration:none; }
+.vet-notice{ font-size:.85rem; color:var(--muted); }
+.view{ max-width:640px; margin:0 auto; padding:16px; }
+.persist-note{ display:none; max-width:640px; margin:12px auto 0; padding:12px 16px;
+  background:var(--warn-bg); border:1px solid var(--warn-line); border-radius:var(--radius); font-size:.95rem; }
+.persist-note.show{ display:block; }
+h1{ font-size:1.5rem; margin:.2em 0 .6em; }
+h2{ font-size:1.2rem; margin:1.2em 0 .5em; }
+p.lead{ font-size:1.05rem; }
+.small{ font-size:.9rem; color:var(--muted); }
+.tabbar{ position:fixed; left:0; right:0; bottom:0; z-index:30; display:flex;
+  background:#fffdf8; border-top:2px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+.tabbar a{ flex:1; text-align:center; padding:8px 2px 6px; color:var(--ink);
+  text-decoration:none; font-size:1.15rem; line-height:1.25; }
+.tabbar a span{ display:block; font-size:.78rem; }
+.tabbar a:active{ background:#f3ead9; }
+.dot-aka{ background:var(--dot-aka);} .dot-ao{ background:var(--dot-ao);}
+.dot-midori{ background:var(--dot-midori);} .dot-yamabuki{ background:var(--dot-yamabuki);}
+.dot-murasaki{ background:var(--dot-murasaki);} .dot-chairo{ background:var(--dot-chairo);}
+.color-aka{ border-color:var(--dot-aka)!important; } .color-ao{ border-color:var(--dot-ao)!important; }
+.color-midori{ border-color:var(--dot-midori)!important; } .color-yamabuki{ border-color:var(--dot-yamabuki)!important; }
+.color-murasaki{ border-color:var(--dot-murasaki)!important; } .color-chairo{ border-color:var(--dot-chairo)!important; }

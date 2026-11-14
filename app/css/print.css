@@ -1,0 +1,11 @@
+/* 申し送り印刷ビュー用 */
+@media print{
+  .app-header, .tabbar, .no-print, .persist-note{ display:none !important; }
+  body{ padding:0; background:#fff; font-size:12pt; }
+  .view{ max-width:none; padding:0; }
+  .print-sheet{ display:block !important; }
+  table.data th, table.data td{ border:1px solid #000; }
+}
+.print-sheet{ display:none; }
+.print-sheet h1{ font-size:16pt; }
+.print-sheet h2{ font-size:13pt; border-bottom:2px solid #000; padding-bottom:4px; }

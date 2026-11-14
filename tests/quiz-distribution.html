@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>診断 総当たり分布テスト｜そばにいる手帳</title>
+<style>body{font-family:sans-serif;padding:16px;line-height:1.7} table{border-collapse:collapse} th,td{border:1px solid #333;padding:6px 12px}</style>
+</head>
+<body>
+<h1>性格診断 総当たり分布（3の10乗＝59,049通り × 犬・猫）</h1>
+<button id="run" style="min-height:48px;padding:10px 20px;font-size:16px">総当たりを実行</button>
+<div id="out"></div>
+<script type="module">
+import { DOG } from "../shindan/js/data-dog.js";
+import { CAT } from "../shindan/js/data-cat.js";
+import { scoreQuiz } from "../shindan/js/score.js";
+
+function distribution(data) {
+  const counts = {};
+  const total = Math.pow(3, 10);
+  const answers = new Array(10).fill(0);
+  for (let n = 0; n < total; n++) {
+    let x = n;
+    for (let i = 0; i < 10; i++) { answers[i] = x % 3; x = Math.floor(x / 3); }
+    const { typeAxis } = scoreQuiz(answers, data.questions, data.axes, 1);
+    counts[typeAxis] = (counts[typeAxis] || 0) + 1;
+  }
+  return { counts, total };
+}
+document.getElementById("run").addEventListener("click", () => {
+  const out = document.getElementById("out");
+  let html = "";
+  for (const data of [DOG, CAT]) {
+    const { counts, total } = distribution(data);
+    html += `<h2>${data.title}</h2><table><tr><th>タイプ</th><th>件数</th><th>割合</th></tr>`;
+    for (const [axis, t] of Object.entries(data.types)) {
+      const slug = axis === "balance" ? "balance" : axis;
+      const c = counts[axis] || 0;
+      html += `<tr><td>${t.name}</td><td>${c}</td><td>${(c / total * 100).toFixed(1)}%</td></tr>`;
+    }
+    html += `</table>`;
+  }
+  out.innerHTML = html;
+});
+</script>
+</body>
+</html>
